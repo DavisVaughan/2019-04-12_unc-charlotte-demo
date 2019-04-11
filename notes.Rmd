@@ -1,6 +1,6 @@
 ---
 title: "Modeling in the Tidyverse"
-author: Max Kuhn (RStudio)
+author: Davis Vaughan (RStudio)
 output:
   xaringan::moon_reader:
     css: ["mtheme_max.css", "fonts_mtheme_max.css"]    
@@ -272,8 +272,8 @@ ames_prices <- "http://bit.ly/2whgsQM" %>%
   read_delim(delim = "\t", guess_max = 2000) %>%
   rename_at(vars(contains(' ')), list(~gsub(' ', '_', .))) %>%
   rename(Sale_Price = SalePrice) %>%
-  filter(!is.na(Electrical)) %>%
-  select(-Order, -PID, -Garage_Yr_Blt)
+  dplyr::filter(!is.na(Electrical)) %>%
+  dplyr::select(-Order, -PID, -Garage_Yr_Blt)
 
 ames_prices %>%
   group_by(Alley) %>%
@@ -298,7 +298,7 @@ purrr contains functions that _iterate over lists_ without the explicit use of l
 library(purrr)
 
 mini_ames <- ames_prices %>%
-  select(Alley, Sale_Price, Yr_Sold) %>%
+  dplyr::select(Alley, Sale_Price, Yr_Sold) %>%
   filter(!is.na(Alley))
 
 head(mini_ames, n = 5)
@@ -373,22 +373,6 @@ ames_lst_col %>%
 ```
 
 ]
-
----
-
-# Quick Data Investigation
-
-To get warmed up, let's load the real Ames data and do some basic investigations into the variables, such as exploratory visualizations or summary statistics. The idea is to get a feel for the data. 
-
-Let's take 10 minutes to work on your own or with someone next to you. Collaboration is highly encouraged!
-
-To get the data:
-
-```{r load-ames}
-library(AmesHousing)
-ames <- make_ames()
-```
-
 
 ---
 
@@ -688,20 +672,15 @@ simple_lm_values <- augment(simple_lm)
 names(simple_lm_values)
 ``` 
 
-
 ---
 
-# Hands-On: Some Basic Diagnostics 
+# What if...
 
-From these results, let's take 10 minutes and do some visualizations: 
+* You wanted to specify terms using `x` and `y`?
 
-* Plot the observed versus fitted values
+* You wanted to use a different package for a linear model?
 
-* Plot the residuals
-
-* Plot the predicted versus residuals
-
-Are there any _downsides_ to this approach? 
+* You wanted to try a completely different regression model?
 
 ---
 
@@ -772,7 +751,7 @@ ames_train_log <- ames_train %>%
 fit_xy(
   spec_lm,
   y = ames_train_log$Sale_Price_Log,
-  x = ames_train_log %>% select(Latitude, Longitude)
+  x = ames_train_log %>% dplyr::select(Latitude, Longitude)
 )
 ```
 
@@ -831,11 +810,94 @@ fit_knn
 
 ---
 
-# Predictions
+# Predictions <img src="images/yardstick.png" class="title-hex"><img src="images/purrr.png" class="title-hex"><img src="images/parsnip.png" class="title-hex"><img src="images/dplyr.png" class="title-hex">
 
-Don't use the test set
+<center>
+<h3>`r emo::ji("fire")` Warning! Here be dragons! `r emo::ji("dragon")`</h3>
+</center>
 
+.pull-left[
 
+* I am going to directly predict on the test set.
+
+* This is okay, but generally I'd _use further resampling on the training data_.
+
+* Max has a free book with a section on this: https://bookdown.org/max/FES/resampling.html
+
+]
+
+.pull-right[
+
+```{r split-graph, out.width = '100%', echo = FALSE, message=FALSE, warning=FALSE}
+library(DiagrammeR)
+
+grViz("
+digraph resampling_diag {
+      
+graph [layout = dot, bgcolor = transparent]
+
+node [fontname = Helvetica]
+
+all [shape = circle,
+     label = 'All\nData']
+
+te [shape = circle,
+    style = filled,
+    label = 'Testing',
+    fillcolor = '#eeeeb4']
+
+tr [shape = circle,
+    style = filled,
+    label = 'Training',
+    fillcolor = '#c8d8c2']
+
+r1 [shape = rectangle,
+    label = 'Resample 1']
+
+an1 [shape = oval,
+     style = filled,
+     label = 'Analysis',
+     fillcolor = honeydew]
+as1 [shape = oval,
+     style = filled,
+     label = 'Assessment',
+     fillcolor = ivory]
+
+r2 [shape = rectangle,
+    label = 'Resample 2']
+      
+an2 [shape = oval,
+     style = filled,
+     label = 'Analysis',
+     fillcolor = honeydew]
+
+as2 [shape = oval,
+     style = filled,
+     label = 'Assessment',
+     fillcolor = ivory]
+
+r3 [shape = rectangle,
+    label = 'Resample 3']
+      
+an3 [shape = oval,
+     style = filled,
+     label = 'Analysis',
+     fillcolor = honeydew]
+as3 [shape = oval,
+     style = filled,
+     label = 'Assessment',
+     fillcolor = ivory]
+
+all -> {tr te }
+tr -> {r1 r2 r3 }
+r1 -> {as1 an1 }
+r2 -> {an2 as2 }
+r3 -> {an3 as3 }
+}
+")
+```
+
+]
 
 ---
 
@@ -854,7 +916,7 @@ test_pred <- fit_lm %>%
   mutate(log_price = log10(Sale_Price))
 
 test_pred %>% 
-  select(log_price, .pred) %>% 
+  dplyr::select(log_price, .pred) %>% 
   slice(1:3)
 ```
 ]
@@ -1144,257 +1206,6 @@ For `bake`, `new_data` is the data that the pre-processing should be applied to.
 
 ---
 
-# Hands-On: Zero-Variance Filter
-
-Instead of using `step_other()`, take 10 minutes and research how to eliminate any zero-variance predictors using the [`recipe` reference site](https://tidymodels.github.io/recipes/reference/index.html).
-
-Re-run the recipe with this step. 
-
-What were the results? 
-
-Do you prefer either of these approaches to the other? 
-
-
----
-layout: false
-class: inverse, middle, center
-
-#  Interaction Effects
-
-
----
-
-# Interactions <img src="images/ggplot2.png" class="title-hex">
-
-An **interaction** between two predictors indicates that the relationship between the predictors and the outcome cannot be describe using only one of the variables. 
-
-For example, let's look at the relationship between the price of a house and the year in which it was built. The relationship appears to be slightly nonlinear, possibly quadratic:
-
-.pull-left[
-```{r year-built-code, eval = FALSE}
-price_breaks <- (1:6)*(10^5)
-
-ggplot(
-    ames_train, 
-    aes(x = Year_Built, y = Sale_Price)
-  ) + 
-  geom_point(alpha = 0.4) +
-  scale_x_log10() + 
-  scale_y_continuous(
-    breaks = price_breaks, 
-    trans = "log10"
-  ) +
-  geom_smooth(method = "loess")
-```
-]
-
-.pull-right[
-```{r year-built-plot, echo = FALSE, fig.width=6, fig.height=4.25,  out.width = '90%', fig.align='center', dev = 'svg', dev.args = list(bg = "transparent"), message = FALSE, warning = FALSE}
-price_breaks <- (1:6)*(10^5)
-
-ggplot(
-    ames_train, 
-    aes(x = Year_Built, y = Sale_Price)
-  ) + 
-  geom_point(alpha = 0.4) +
-  scale_x_log10() + 
-  scale_y_continuous(
-    breaks = price_breaks, 
-    trans = "log10"
-  ) +
-  geom_smooth(method = "loess")
-```
-]
-
-
----
-
-# Interactions <img src="images/ggplot2.png" class="title-hex">
-
-However... what if we seperate this trend based on whether the property has air conditioning (`r round(mean(ames_train$Central_Air == "Y")*100, 1)`% of the training set) or not (`r round(mean(ames_train$Central_Air == "N")*100, 1)`%):
-
-.pull-left[
-```{r year-built-ac-code, eval = FALSE}
-library(MASS) # to get robust linear regression model
-
-ggplot(
-    ames_train, 
-    aes(x = Year_Built, 
-        y = Sale_Price)
-  ) + 
-  geom_point(alpha = 0.4) +
-  scale_y_continuous(
-    breaks = price_breaks, 
-    trans = "log10"
-  ) + 
-  facet_wrap(~ Central_Air, nrow = 2) +
-  geom_smooth(method = "rlm") 
-```
-]
-
-.pull-right[
-```{r year-built-ac-plot, echo = FALSE, fig.width=6, fig.height=4.5,  out.width = '100%', fig.align='center', dev = 'svg', dev.args = list(bg = "transparent"), message = FALSE, warning = FALSE}
-library(MASS) # to get robust linear regression model
-
-ggplot(
-    ames_train, 
-    aes(x = Year_Built, 
-        y = Sale_Price)
-  ) + 
-  geom_point(alpha = 0.4) +
-  scale_y_continuous(
-    breaks = price_breaks, 
-    trans = "log10"
-  ) + 
-  facet_wrap(~ Central_Air, nrow = 2) +
-  geom_smooth(method = "rlm") 
-```
-]
-
-
----
-
-# Interactions
-
-It appears as though the relationship between the year built and the sale price is somewhat _different_ for the two groups. 
-
-* When there is no AC, the trend is perhaps flat or slightly decreasing.
-* With AC, there is a linear increasing trend or is perhaps slightly quadratic with some outliers at the low end. 
-
-```{r int-sig}
-mod1 <- lm(log10(Sale_Price) ~ Year_Built + Central_Air, data = ames_train)
-mod2 <- lm(log10(Sale_Price) ~ Year_Built + Central_Air + Year_Built:Central_Air, data = ames_train)
-anova(mod1, mod2)
-```
-
-
----
-
-# Interactions in Recipes <img src="images/recipes.png" class="title-hex">
-
-We first create the dummy variables for the qualitative predictor (`Central_Air`) then use a formula to create the interaction using the `:` operator in an additional step:
-
-```{r int-rec}
-recipe(Sale_Price ~ Year_Built + Central_Air, data = ames_train) %>%
-  step_log(Sale_Price) %>%
-  step_dummy(Central_Air) %>%
-  step_interact(~ starts_with("Central_Air"):Year_Built) %>%
-  prep(training = ames_train) %>%
-  juice() %>%
-  # select a few rows with different values
-  slice(153:157)
-```
-
-
----
-
-# Linear Models Again <img src="images/recipes.png" class="title-hex">
-
-.font80[
-Let's add a few extra predictors and  some preprocessing. 
-
-* Two numeric predictors are very skewed and could use a transformation (`Lot_Area` and `Gr_Liv_Area`).
-
-* We'll add neighborhood in as well and a few other house features. 
-
-* The _K_-NN model suggests that the coordinates can be helpful but probably require a nonlinear representation. We can add these using _B-splines_ with 5 degrees of freedom. To evaluate this, we will create two versions of the recipe to evaluate this hypothesis. 
-]
-
-```{r ames-recipes}
-ames_rec <- 
-  recipe(Sale_Price ~ Bldg_Type + Neighborhood + Year_Built + 
-           Gr_Liv_Area + Full_Bath + Year_Sold + Lot_Area +
-           Central_Air + Longitude + Latitude,
-         data = ames_train) %>%
-  step_log(Sale_Price, base = 10) %>%
-  step_BoxCox(Lot_Area, Gr_Liv_Area) %>%
-  step_other(Neighborhood, threshold = 0.05)  %>%
-  step_dummy(all_nominal()) %>%
-  step_interact(~ starts_with("Central_Air"):Year_Built) %>%
-  step_bs(Longitude, Latitude, options = list(df = 5))
-```
-
-```{r more-digits, include = FALSE}
-options(digits = 5)
-```
-
----
-
-# Longitude <img src="images/ggplot2.png" class="title-hex">
-
-.pull-left[
-```{r longitude-code, eval = FALSE}
-ggplot(ames_train, 
-       aes(x = Longitude, y = Sale_Price)) + 
-  geom_point(alpha = .5) + 
-  geom_smooth(
-    method = "lm", 
-    formula = y ~ splines::bs(x, 5), 
-    se = FALSE
-  ) + 
-  scale_y_log10()
-```
-
-Splines add nonlinear versions of the predictor to a linear model to create smooth and flexible relationships between the predictor and outcome.
-
-This "basis expansion" technique will be seen again in the regression section of the workshop. 
-
-
-]
-.pull-right[
-```{r longitude, echo = FALSE, fig.width=6, fig.height=4.25,  out.width = '100%', fig.align='center', dev = 'svg', dev.args = list(bg = "transparent")}
-ggplot(ames_train, 
-       aes(x = Longitude, y = Sale_Price)) + 
-  geom_point(alpha = .5) + 
-  geom_smooth(
-    method = "lm", 
-    formula = y ~ splines::bs(x, 5), 
-    se = FALSE
-  ) + 
-  scale_y_log10()
-```
-]
-
-
----
-
-# Latitude <img src="images/ggplot2.png" class="title-hex">
-
-.pull-left[
-```{r latitude-code, eval = FALSE}
-ggplot(ames_train, 
-       aes(x = Latitude, y = Sale_Price)) + 
-  geom_point(alpha = .5) + 
-  geom_smooth(
-    method = "lm", 
-    formula = y ~ splines::bs(x, 5), 
-    se = FALSE
-  ) + 
-  scale_y_log10()
-```
-]
-
-.pull-right[
-```{r latitude, echo = FALSE, fig.width=6, fig.height=4.25,  out.width = '100%', fig.align='center', dev = 'svg', dev.args = list(bg = "transparent")}
-ggplot(ames_train, 
-       aes(x = Latitude, y = Sale_Price)) + 
-  geom_point(alpha = .5) + 
-  geom_smooth(
-    method = "lm", 
-    formula = y ~ splines::bs(x, 5), 
-    se = FALSE
-  ) + 
-  scale_y_log10()
-```
-]
-
-```{r less-digits, include = FALSE}
-options(digits = 3)
-```
-
-
----
-
 # Next Steps
 
 .font90[
@@ -1409,7 +1220,7 @@ options(digits = 3)
 
 * When you don't want to make a prediction, **equivocal zone** data structures are available ([`probably`](https://tidymodels.github.io/probably/)).
 
-* If you are making your own modeling package, `hardhat` makes the **behind-the-scene code** simple. 
+* If you are making your own modeling package, ([`hardhat`](https://github.com/tidymodels/hardhat)) makes the **behind-the-scene code** simple. 
 
 * Feature engineering for **text data** is easy ([`tidytext`](https://github.com/juliasilge/tidytext) and [`textrecipes`](https://tidymodels.github.io/textrecipes/))
 
