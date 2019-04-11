@@ -1,4 +1,10 @@
 base
+methods
+datasets
+utils
+grDevices
+graphics
+stats
 tidymodels
 broom
 scales
@@ -13,6 +19,8 @@ tidyr
 rsample
 tibble
 yardstick
+kableExtra
+ggthemes
 AmesHousing
 leaflet
 htmltools
@@ -21,5 +29,3 @@ tidyverse
 readr
 stringr
 forcats
-kableExtra
-embed
