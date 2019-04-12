@@ -238,24 +238,16 @@ ia_map
 
 Many tidyverse functions have syntax unlike base R code. For example:
 
-* Vectors of variable names are eschewed in favor of _functional programming_. For example: 
-
-```{r func-ex, eval = FALSE}
-contains("Sepal")
-
-# instead of 
-
-c("Sepal.Width", "Sepal.Length")
-```
-
 * The _pipe_ operator is preferred. For example:
 
 ```{r pipe-ex, eval = FALSE}
-merged <- inner_join(a, b)
+a_tmp <- mutate(a, x = 5)
+merged <- inner_join(a_tmp, b)
 
 # is equal to
 
 merged <- a %>%
+  mutate(x = 5) %>%
   inner_join(b) 
 ```
 
@@ -283,97 +275,6 @@ ames_prices %>%
   )
 ```
 
-
----
-
-# Examples of `purrr::map*` <img src="images/dplyr.png" class="title-hex"><img src="images/purrr.png" class="title-hex">
-
-purrr contains functions that _iterate over lists_ without the explicit use of loops. They are similar to the family of apply functions in base R, but are type stable.
-
-
-
-.pull-left[
-
-```{r purrr-example-lhs}
-library(purrr)
-
-mini_ames <- ames_prices %>%
-  dplyr::select(Alley, Sale_Price, Yr_Sold) %>%
-  filter(!is.na(Alley))
-
-head(mini_ames, n = 5)
-```
-
-]
-
-.pull-right[
-```{r purrr-split-map}
-by_alley <- split(mini_ames, mini_ames$Alley)
-# map(.x, .f, ...)
-map(by_alley, head, n = 2)
-```
-
-]
-
----
-
-# Examples of `purrr::map*` <img src="images/dplyr.png" class="title-hex"><img src="images/purrr.png" class="title-hex">
-
-.pull-left[
-```{r purrr-map-nrow}
-map(by_alley, nrow)
-```
-
-`map()` always returns a list. Use suffixed versions for simplification of the result.
-
-```{r purrr-map-int}
-map_int(by_alley, nrow)
-```
-
-]
-
-.pull-right[
-
-Complex operations can be specified using a _formula notation_. Access the current
-thing you are iterating over with `.x`.
-
-```{r purrr-map-summarise}
-map(
-  by_alley, 
-  ~summarise(.x, max_price = max(Sale_Price))
-)
-```
-
-]
-
----
-
-# `purrr` and list-columns <img src="images/dplyr.png" class="title-hex"><img src="images/purrr.png" class="title-hex"><img src="images/tidyr.png" class="title-hex">
-
-Rather than using `split()`, we can `tidyr::nest()` by `Alley` to get a data frame with
-a _list-column_. We often use these when working with _multiple models_.
-
-.pull-left[
-
-```{r tidyr-nest}
-ames_lst_col <- nest(mini_ames, -Alley)
-ames_lst_col
-```
-
-]
-
-.pull-right[
-
-```{r list-col-mutate}
-ames_lst_col %>%
-  mutate(
-    n_row = map_int(data, nrow),
-    max   = map_dbl(data, ~max(.x$Sale_Price))
-  )
-```
-
-]
-
 ---
 
 # Resources
@@ -387,7 +288,6 @@ ames_lst_col %>%
 * [CRAN Machine Learning Task View](https://cran.r-project.org/web/views/MachineLearning.html)
 
 About these slides.... they were created with Yihui's [`xaringan`](https://github.com/yihui/xaringan) and the stylings are a slightly modified version of Patrick Schratz's  [Metropolis theme](https://github.com/pat-s/xaringan-metropolis).
-
 
 ---
 
@@ -404,7 +304,6 @@ Common steps during model building are:
 * calculating the performance of the final model that will generalize to new data
 
 Many books and courses portray predictive modeling as a short sprint. A better analogy would be a marathon or campaign (depending on how hard the problem is). 
-
 
 ---
 
@@ -506,11 +405,6 @@ Given a fixed amount of data:
 
 * too much spent in testing won't allow us to get a good assessment of model parameters
 
-Statistically, the best course of action would be to use all the data for model building and use statistical methods to get good estimates of error.
-
-From a non-statistical perspective, many consumers of complex models emphasize the need for an untouched set of samples to evaluate performance.
-
-
 ---
 
 # Mechanics of Data Splitting
@@ -533,21 +427,20 @@ Let's load the example data set and split it. We'll put 75% into training and 25
 ```{r ames-split, message = FALSE}
 library(AmesHousing)
 library(rsample)
-ames <- 
-  make_ames() %>% 
-  # Remove quality-related predictors
-  dplyr::select(-matches("Qu"))
+
+ames <- make_ames() 
 nrow(ames)
 
 # Make sure that you get the same random numbers
 set.seed(4595)
-data_split <- initial_split(ames, strata = "Sale_Price")
+data_split <- initial_split(ames, strata = "Sale_Price", prop = .75)
 
 ames_train <- training(data_split)
 ames_test  <- testing(data_split)
 
-nrow(ames_train)/nrow(ames)
+nrow(ames_train) / nrow(ames)
 ```
+
 ???
 
 The select statement removes subjective quality scores which, to me, seems
@@ -624,10 +517,6 @@ This is very convenient but it has some disadvantages.
 
 * You can't nest in-line functions such as `model_fn(y ~ pca(scale(x1), scale(x2), scale(x3)), data = dat)`.
 
-* All the model matrix calculations happen at once and can't be recycled when used in a model function. 
-
-* For very _wide_ data sets, the formula method can be [extremely inefficient](https://rviews.rstudio.com/2017/03/01/the-r-formula-method-the-bad-parts/). 
-
 * There are limited _roles_ that variables can take which has led to several re-implementations of formulas. 
 
 * Specifying multivariate outcomes is clunky and inelegant.
@@ -663,12 +552,10 @@ Let's start by fitting an ordinary linear regression model to the training set. 
 simple_lm <- lm(log10(Sale_Price) ~ Longitude + Latitude, data = ames_train)
 ```
 
-Before looking at coefficients, we should do some model checking to see if there is anything obviously wrong with the model. 
-
 To get the statistics on the individual data points, we will use the awesome `broom` package:
 
 ```{r lm-broom, warning= FALSE, message= FALSE}
-simple_lm_values <- augment(simple_lm)
+simple_lm_values <- broom::augment(simple_lm)
 names(simple_lm_values)
 ``` 
 
@@ -828,74 +715,7 @@ fit_knn
 
 .pull-right[
 
-```{r split-graph, out.width = '100%', echo = FALSE, message=FALSE, warning=FALSE}
-library(DiagrammeR)
-
-grViz("
-digraph resampling_diag {
-      
-graph [layout = dot, bgcolor = transparent]
-
-node [fontname = Helvetica]
-
-all [shape = circle,
-     label = 'All\nData']
-
-te [shape = circle,
-    style = filled,
-    label = 'Testing',
-    fillcolor = '#eeeeb4']
-
-tr [shape = circle,
-    style = filled,
-    label = 'Training',
-    fillcolor = '#c8d8c2']
-
-r1 [shape = rectangle,
-    label = 'Resample 1']
-
-an1 [shape = oval,
-     style = filled,
-     label = 'Analysis',
-     fillcolor = honeydew]
-as1 [shape = oval,
-     style = filled,
-     label = 'Assessment',
-     fillcolor = ivory]
-
-r2 [shape = rectangle,
-    label = 'Resample 2']
-      
-an2 [shape = oval,
-     style = filled,
-     label = 'Analysis',
-     fillcolor = honeydew]
-
-as2 [shape = oval,
-     style = filled,
-     label = 'Assessment',
-     fillcolor = ivory]
-
-r3 [shape = rectangle,
-    label = 'Resample 3']
-      
-an3 [shape = oval,
-     style = filled,
-     label = 'Analysis',
-     fillcolor = honeydew]
-as3 [shape = oval,
-     style = filled,
-     label = 'Assessment',
-     fillcolor = ivory]
-
-all -> {tr te }
-tr -> {r1 r2 r3 }
-r1 -> {as1 an1 }
-r2 -> {an2 as2 }
-r3 -> {an3 as3 }
-}
-")
-```
+![](images/resampling.svg)
 
 ]
 
@@ -913,10 +733,10 @@ Now, let's compute predictions and performance measures:
 test_pred <- fit_lm %>%
   predict(ames_test) %>%
   bind_cols(ames_test) %>%
-  mutate(log_price = log10(Sale_Price))
+  mutate(log_price = log10(Sale_Price)) %>%
+  dplyr::select(log_price, .pred)
 
-test_pred %>% 
-  dplyr::select(log_price, .pred) %>% 
+test_pred %>%
   slice(1:3)
 ```
 ]
@@ -928,7 +748,7 @@ library(yardstick)
 
 # yardstick has many metrics for assessing performance. 
 # They can be bundled together
-perf_metrics <- metric_set(rmse, rsq, ccc)
+perf_metrics <- metric_set(rmse, rsq)
 
 # A tidy result back:
 test_pred  %>% 
@@ -969,7 +789,7 @@ In statistics, this is generally called _preprocessing_ the data. As usual, the 
 
 * Other models are very sensitive to correlations between the predictors and **filters** or **PCA signal extraction** can improve the model. 
 
-* As we'll see in an example, changing the scale of the predictors using a **transformation** can lead to a big improvement. 
+* Changing the scale of the predictors using a **transformation** can lead to a big improvement. 
 
 * In other cases, the data can be **encoded** in a way that maximizes its effect on the model. Representing the date as the day of the week can be very effective for modeling public transportation data. 
 
@@ -1188,24 +1008,6 @@ Selectors can be used with `bake()` to only extract relevant columns and the def
 
 ---
 
-# How Data Are Used <img src="images/recipes.png" class="title-hex">
-
-Note that we have:
-
-```{r rec-data-args, eval = FALSE}
-recipe(..., data = data_set)
-prep(...,   training = data_set)
-bake(...,   new_data = data_set)
-```
-
-In the first case, `data` is used by the `recipe` function only to determine the column names and types (e.g. factor, numeric, etc). A small subset can be passed via `head` or `slice`. 
-
-For `prep`, the `training` argument should have all of the data used to estimate parameters and other quantities. 
-
-For `bake`, `new_data` is the data that the pre-processing should be applied to. 
-
----
-
 # Next Steps
 
 .font90[
@@ -1228,3 +1030,8 @@ For `bake`, `new_data` is the data that the pre-processing should be applied to.
 
 ]
 
+---
+layout: false
+class: inverse, middle, center
+
+#  Thank You!
